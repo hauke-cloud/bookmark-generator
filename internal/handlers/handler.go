@@ -77,7 +77,9 @@ func (h *Handler) ServeFirefoxBookmarks(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=bookmarks.html")
-	w.Write(bookmarkData)
+	if _, err := w.Write(bookmarkData); err != nil {
+		log.Printf("Error writing response: %v", err)
+	}
 }
 
 // ServeChromeBookmarks generates and serves Chrome bookmarks
