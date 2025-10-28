@@ -24,10 +24,9 @@ WORKDIR /app
 COPY --from=builder /app/bookmark-generator .
 
 # Create non-root user
-RUN adduser -D -u 65534 nonroot && \
-    chown -R nonroot:nonroot /app
+RUN chown -R nobody:nobody /app
 
-USER nonroot
+USER nobody
 
 # Expose port
 EXPOSE 8080
