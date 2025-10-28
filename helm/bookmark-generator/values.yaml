@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: bookmark-generator
+  repository: ghcr.io/hauke-cloud/bookmark-generator
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: "latest"
@@ -33,7 +33,7 @@ podSecurityContext:
 securityContext:
   capabilities:
     drop:
-    - ALL
+      - ALL
   readOnlyRootFilesystem: true
   allowPrivilegeEscalation: false
 
