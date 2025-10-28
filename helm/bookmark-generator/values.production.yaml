@@ -1,0 +1,73 @@
+# Example production values for bookmark-generator
+# Copy this file and customize for your environment
+
+replicaCount: 2
+
+image:
+  repository: your-registry.example.com/bookmark-generator
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+# imagePullSecrets:
+#   - name: regcred
+
+serviceAccount:
+  create: true
+  annotations: {}
+
+podAnnotations:
+  prometheus.io/scrape: "false"
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: bookmarks.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: bookmark-generator-tls
+      hosts:
+        - bookmarks.example.com
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - bookmark-generator
+          topologyKey: kubernetes.io/hostname
+
+rbac:
+  create: true

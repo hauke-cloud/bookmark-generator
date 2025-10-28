@@ -1,0 +1,14 @@
+apiVersion: v2
+name: bookmark-generator
+description: A Helm chart for Kubernetes Bookmark Generator
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - kubernetes
+  - bookmarks
+  - ingress
+maintainers:
+  - name: hauke-cloud
+sources:
+  - https://github.com/hauke-cloud/bookmark-generator
