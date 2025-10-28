@@ -18,10 +18,16 @@ FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+WORKDIR /app
 
 # Copy the binary from builder
 COPY --from=builder /app/bookmark-generator .
+
+# Create non-root user
+RUN adduser -D -u 65534 nonroot && \
+    chown -R nonroot:nonroot /app
+
+USER nonroot
 
 # Expose port
 EXPOSE 8080

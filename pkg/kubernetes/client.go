@@ -61,6 +61,49 @@ func (c *Client) GetIngresses(ctx context.Context) ([]IngressInfo, error) {
 	return result, nil
 }
 
+// GetIngressesByNamespace retrieves ingresses grouped by namespace, with unique hosts only
+func (c *Client) GetIngressesByNamespace(ctx context.Context) (map[string][]IngressInfo, error) {
+	ingresses, err := c.clientset.NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ingresses: %w", err)
+	}
+
+	grouped := make(map[string]map[string]IngressInfo) // namespace -> host -> IngressInfo
+
+	for _, ingress := range ingresses.Items {
+		infos := c.extractIngressInfo(&ingress)
+		
+		if _, exists := grouped[ingress.Namespace]; !exists {
+			grouped[ingress.Namespace] = make(map[string]IngressInfo)
+		}
+		
+		// Keep only one entry per unique host per namespace
+		for _, info := range infos {
+			if _, exists := grouped[ingress.Namespace][info.Host]; !exists {
+				grouped[ingress.Namespace][info.Host] = info
+			}
+		}
+	}
+
+	// Convert to sorted slice per namespace
+	result := make(map[string][]IngressInfo)
+	for namespace, hosts := range grouped {
+		var ingressList []IngressInfo
+		for _, info := range hosts {
+			ingressList = append(ingressList, info)
+		}
+		
+		// Sort by host for consistent output
+		sort.Slice(ingressList, func(i, j int) bool {
+			return ingressList[i].Host < ingressList[j].Host
+		})
+		
+		result[namespace] = ingressList
+	}
+
+	return result, nil
+}
+
 func (c *Client) extractIngressInfo(ingress *networkingv1.Ingress) []IngressInfo {
 	var result []IngressInfo
 

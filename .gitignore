@@ -1,5 +1,5 @@
 # Binaries
-bookmark-generator
+./bookmark-generator
 *.exe
 *.dll
 *.so

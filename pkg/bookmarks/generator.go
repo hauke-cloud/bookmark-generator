@@ -46,6 +46,52 @@ func (g *Generator) GenerateFirefox(ingresses []kubernetes.IngressInfo) []byte {
 	return []byte(html)
 }
 
+// GenerateFirefoxGrouped creates a Firefox-compatible HTML bookmark file with namespace folders
+func (g *Generator) GenerateFirefoxGrouped(ingressesByNamespace map[string][]kubernetes.IngressInfo) []byte {
+	timestamp := time.Now().Unix()
+
+	html := fmt.Sprintf(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- This is an automatically generated file.
+     It will be read and overwritten.
+     DO NOT EDIT! -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks Menu</H1>
+
+<DL><p>
+    <DT><H3 ADD_DATE="%d" LAST_MODIFIED="%d">Kubernetes Ingresses</H3>
+    <DL><p>
+`, timestamp, timestamp)
+
+	// Get sorted namespace list
+	namespaces := make([]string, 0, len(ingressesByNamespace))
+	for ns := range ingressesByNamespace {
+		namespaces = append(namespaces, ns)
+	}
+	sortStrings(namespaces)
+
+	for _, namespace := range namespaces {
+		ingresses := ingressesByNamespace[namespace]
+		html += fmt.Sprintf(`        <DT><H3 ADD_DATE="%d" LAST_MODIFIED="%d">%s</H3>
+        <DL><p>
+`, timestamp, timestamp, escapeHTML(namespace))
+
+		for _, ingress := range ingresses {
+			html += fmt.Sprintf(`            <DT><A HREF="%s" ADD_DATE="%d">%s</A>
+`, ingress.URL, timestamp, escapeHTML(ingress.Host))
+		}
+
+		html += `        </DL><p>
+`
+	}
+
+	html += `    </DL><p>
+</DL><p>
+`
+
+	return []byte(html)
+}
+
 // GenerateChrome creates a Chrome-compatible JSON bookmark file
 func (g *Generator) GenerateChrome(ingresses []kubernetes.IngressInfo) ([]byte, error) {
 	timestamp := time.Now().Unix()
@@ -110,6 +156,95 @@ func (g *Generator) GenerateChrome(ingresses []kubernetes.IngressInfo) ([]byte, 
 	return json.MarshalIndent(bookmarks, "", "  ")
 }
 
+// GenerateChromeGrouped creates a Chrome-compatible JSON bookmark file with namespace folders
+func (g *Generator) GenerateChromeGrouped(ingressesByNamespace map[string][]kubernetes.IngressInfo) ([]byte, error) {
+	timestamp := time.Now().Unix()
+	idCounter := 1
+
+	// Get sorted namespace list
+	namespaces := make([]string, 0, len(ingressesByNamespace))
+	for ns := range ingressesByNamespace {
+		namespaces = append(namespaces, ns)
+	}
+	sortStrings(namespaces)
+
+	namespaceFolders := make([]map[string]interface{}, 0, len(namespaces))
+	
+	for _, namespace := range namespaces {
+		ingresses := ingressesByNamespace[namespace]
+		children := make([]map[string]interface{}, 0, len(ingresses))
+		
+		for _, ingress := range ingresses {
+			idCounter++
+			children = append(children, map[string]interface{}{
+				"date_added": fmt.Sprintf("%d000000", timestamp),
+				"guid":       generateGUID(ingress.URL),
+				"id":         fmt.Sprintf("%d", idCounter),
+				"name":       ingress.Host,
+				"type":       "url",
+				"url":        ingress.URL,
+			})
+		}
+		
+		idCounter++
+		namespaceFolders = append(namespaceFolders, map[string]interface{}{
+			"date_added":    fmt.Sprintf("%d000000", timestamp),
+			"date_modified": fmt.Sprintf("%d000000", timestamp),
+			"guid":          generateGUID(namespace),
+			"id":            fmt.Sprintf("%d", idCounter),
+			"name":          namespace,
+			"type":          "folder",
+			"children":      children,
+		})
+	}
+
+	bookmarks := map[string]interface{}{
+		"checksum": "computed_checksum",
+		"roots": map[string]interface{}{
+			"bookmark_bar": map[string]interface{}{
+				"children": []map[string]interface{}{
+					{
+						"date_added":    fmt.Sprintf("%d000000", timestamp),
+						"date_modified": fmt.Sprintf("%d000000", timestamp),
+						"guid":          "00000000-0000-4000-a000-000000000001",
+						"id":            "1",
+						"name":          "Kubernetes Ingresses",
+						"type":          "folder",
+						"children":      namespaceFolders,
+					},
+				},
+				"date_added":    fmt.Sprintf("%d000000", timestamp),
+				"date_modified": fmt.Sprintf("%d000000", timestamp),
+				"guid":          "00000000-0000-4000-a000-000000000000",
+				"id":            "0",
+				"name":          "Bookmarks bar",
+				"type":          "folder",
+			},
+			"other": map[string]interface{}{
+				"children":      []map[string]interface{}{},
+				"date_added":    fmt.Sprintf("%d000000", timestamp),
+				"date_modified": fmt.Sprintf("%d000000", timestamp),
+				"guid":          "00000000-0000-4000-a000-000000000002",
+				"id":            "2",
+				"name":          "Other bookmarks",
+				"type":          "folder",
+			},
+			"synced": map[string]interface{}{
+				"children":      []map[string]interface{}{},
+				"date_added":    fmt.Sprintf("%d000000", timestamp),
+				"date_modified": fmt.Sprintf("%d000000", timestamp),
+				"guid":          "00000000-0000-4000-a000-000000000003",
+				"id":            "3",
+				"name":          "Mobile bookmarks",
+				"type":          "folder",
+			},
+		},
+		"version": 1,
+	}
+
+	return json.MarshalIndent(bookmarks, "", "  ")
+}
+
 func escapeHTML(s string) string {
 	// Basic HTML escaping
 	replacements := map[rune]string{
@@ -139,4 +274,15 @@ func generateGUID(url string) string {
 		hash = (hash * 31) + int(c)
 	}
 	return fmt.Sprintf("%08x-0000-4000-a000-%012x", hash&0xffffffff, hash&0xffffffffffff)
+}
+
+func sortStrings(s []string) {
+	// Simple bubble sort for small slices
+	for i := 0; i < len(s); i++ {
+		for j := i + 1; j < len(s); j++ {
+			if s[i] > s[j] {
+				s[i], s[j] = s[j], s[i]
+			}
+		}
+	}
 }

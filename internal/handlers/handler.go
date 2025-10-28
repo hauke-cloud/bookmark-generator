@@ -66,14 +66,14 @@ func (h *Handler) ServeFirefoxBookmarks(w http.ResponseWriter, r *http.Request) 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	ingresses, err := h.k8sClient.GetIngresses(ctx)
+	ingressesByNamespace, err := h.k8sClient.GetIngressesByNamespace(ctx)
 	if err != nil {
 		log.Printf("Error getting ingresses: %v", err)
 		http.Error(w, "Failed to retrieve ingresses", http.StatusInternalServerError)
 		return
 	}
 
-	bookmarkData := h.generator.GenerateFirefox(ingresses)
+	bookmarkData := h.generator.GenerateFirefoxGrouped(ingressesByNamespace)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=bookmarks.html")
@@ -85,14 +85,14 @@ func (h *Handler) ServeChromeBookmarks(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	ingresses, err := h.k8sClient.GetIngresses(ctx)
+	ingressesByNamespace, err := h.k8sClient.GetIngressesByNamespace(ctx)
 	if err != nil {
 		log.Printf("Error getting ingresses: %v", err)
 		http.Error(w, "Failed to retrieve ingresses", http.StatusInternalServerError)
 		return
 	}
 
-	bookmarkData, err := h.generator.GenerateChrome(ingresses)
+	bookmarkData, err := h.generator.GenerateChromeGrouped(ingressesByNamespace)
 	if err != nil {
 		log.Printf("Error generating Chrome bookmarks: %v", err)
 		http.Error(w, "Failed to generate bookmarks", http.StatusInternalServerError)

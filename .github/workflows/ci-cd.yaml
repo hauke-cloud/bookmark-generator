@@ -1,9 +1,10 @@
-name: Release Docker Container and Helm Chart
+name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
 
 permissions:
   contents: write
@@ -18,7 +19,10 @@ env:
 
 jobs:
   version:
+    name: Version Processing
     runs-on: ubuntu-latest
+    # Only run version processing on main branch
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     outputs:
       version: ${{ steps.version.outputs.next }}
       changed: ${{ steps.version.outputs.changed }}
@@ -30,7 +34,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: github-action-svu
+      - name: Calculate next version
         uses: charlesthomas/github-action-svu@v1.1.3+3.2.3
         id: version
         with:
@@ -38,10 +42,98 @@ jobs:
           verbose: true
           cmd: next
 
-  build-and-push-docker:
+  lint-go:
+    name: Lint Go
     runs-on: ubuntu-latest
-    needs: version
-    if: needs.version.outputs.changed
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  lint-helm:
+    name: Lint Helm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'latest'
+
+      - name: Lint Helm chart
+        run: helm lint ${{ env.CHART_DIR }}
+
+      - name: Template Helm chart
+        run: helm template bookmark-generator ${{ env.CHART_DIR }}
+
+  test:
+    name: Test Go
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+        continue-on-error: true
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint-go, lint-helm, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binary
+        run: go build -v -o bookmark-generator ./cmd/bookmark-generator
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: bookmark-generator:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release-docker:
+    name: Release Docker Image
+    runs-on: ubuntu-latest
+    needs: [version, build]
+    if: needs.version.outputs.changed == 'true'
 
     steps:
       - name: Checkout
@@ -58,7 +150,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -69,9 +161,10 @@ jobs:
           cache-to: type=gha,mode=max
 
   release-helm:
+    name: Release Helm Chart
     runs-on: ubuntu-latest
-    needs: [version, build-and-push-docker]
-    if: needs.version.outputs.changed
+    needs: [version, release-docker]
+    if: needs.version.outputs.changed == 'true'
 
     steps:
       - name: Checkout
@@ -92,17 +185,17 @@ jobs:
             helm dependency build
           fi
 
-      - name: Align Chart.yaml version (in-memory)
+      - name: Align Chart.yaml version
         run: |
           VER="${{ needs.version.outputs.version }}"
-          yq -i ".version = \"${VER}\"" "${CHART_DIR}/Chart.yaml"
-          yq -i ".appVersion = \"${VER}\"" "${CHART_DIR}/Chart.yaml"
+          yq -i ".version = \"${VER}\"" "${{ env.CHART_DIR }}/Chart.yaml"
+          yq -i ".appVersion = \"${VER}\"" "${{ env.CHART_DIR }}/Chart.yaml"
           echo "Chart.yaml set to version ${VER}"
 
       - name: Package chart
         run: |
           VER="${{ needs.version.outputs.version }}"
-          helm package "${CHART_DIR}" --version "${VER}"
+          helm package "${{ env.CHART_DIR }}" --version "${VER}"
           ls -l "${{ env.CHART_NAME }}-${VER}.tgz"
 
       - name: Login to OCI registry
