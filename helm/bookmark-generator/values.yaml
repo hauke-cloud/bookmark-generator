@@ -110,3 +110,7 @@ readinessProbe:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
+
+# oAuth2
+oauth2-proxy:
+  enabled: false
