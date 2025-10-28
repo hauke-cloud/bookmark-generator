@@ -21,10 +21,6 @@ bookmark-generator
 
 # Examples and tests
 examples/
-*_test.go
-
-# Helm
-helm/
 
 # OS files
 .DS_Store
