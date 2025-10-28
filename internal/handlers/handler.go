@@ -103,7 +103,9 @@ func (h *Handler) ServeChromeBookmarks(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=bookmarks.json")
-	w.Write(bookmarkData)
+	if _, err := w.Write(bookmarkData); err != nil {
+		log.Printf("Error writing response: %v", err)
+	}
 }
 
 // ServeHealth provides a health check endpoint
