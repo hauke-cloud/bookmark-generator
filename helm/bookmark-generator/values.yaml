@@ -8,7 +8,7 @@ image:
   repository: ghcr.io/hauke-cloud/bookmark-generator
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "latest"
+  # tag: "latest"
 
 imagePullSecrets: []
 nameOverride: ""
