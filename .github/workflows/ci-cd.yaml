@@ -71,6 +71,13 @@ jobs:
         with:
           version: 'latest'
 
+      - name: Download Helm dependencies
+        working-directory: ${{ env.CHART_DIR }}
+        run: |
+          if [ -f Chart.yaml ] && grep -q "^dependencies:" Chart.yaml; then
+            helm dependency update
+          fi
+
       - name: Lint Helm chart
         run: helm lint ${{ env.CHART_DIR }}
 
